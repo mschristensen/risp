@@ -8,13 +8,11 @@ package _go
 
 import (
 	context "context"
-	_ "google.golang.org/genproto/googleapis/api/annotations"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 )
@@ -26,17 +24,20 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Packet struct {
+type Message struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id     string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Status string `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Uuid    []byte `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Window  []byte `protobuf:"bytes,2,opt,name=window,proto3" json:"window,omitempty"`
+	Mask    []byte `protobuf:"bytes,3,opt,name=mask,proto3" json:"mask,omitempty"`
+	Target  []byte `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	Payload uint32 `protobuf:"varint,5,opt,name=payload,proto3" json:"payload,omitempty"`
 }
 
-func (x *Packet) Reset() {
-	*x = Packet{}
+func (x *Message) Reset() {
+	*x = Message{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_risp_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -44,13 +45,13 @@ func (x *Packet) Reset() {
 	}
 }
 
-func (x *Packet) String() string {
+func (x *Message) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Packet) ProtoMessage() {}
+func (*Message) ProtoMessage() {}
 
-func (x *Packet) ProtoReflect() protoreflect.Message {
+func (x *Message) ProtoReflect() protoreflect.Message {
 	mi := &file_risp_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -62,45 +63,62 @@ func (x *Packet) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Packet.ProtoReflect.Descriptor instead.
-func (*Packet) Descriptor() ([]byte, []int) {
+// Deprecated: Use Message.ProtoReflect.Descriptor instead.
+func (*Message) Descriptor() ([]byte, []int) {
 	return file_risp_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Packet) GetId() string {
+func (x *Message) GetUuid() []byte {
 	if x != nil {
-		return x.Id
+		return x.Uuid
 	}
-	return ""
+	return nil
 }
 
-func (x *Packet) GetStatus() string {
+func (x *Message) GetWindow() []byte {
 	if x != nil {
-		return x.Status
+		return x.Window
 	}
-	return ""
+	return nil
+}
+
+func (x *Message) GetMask() []byte {
+	if x != nil {
+		return x.Mask
+	}
+	return nil
+}
+
+func (x *Message) GetTarget() []byte {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *Message) GetPayload() uint32 {
+	if x != nil {
+		return x.Payload
+	}
+	return 0
 }
 
 var File_risp_proto protoreflect.FileDescriptor
 
 var file_risp_proto_rawDesc = []byte{
 	0x0a, 0x0a, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x07, 0x72, 0x69,
-	0x73, 0x70, 0x2e, 0x76, 0x31, 0x1a, 0x1b, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2f, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x65, 0x6d, 0x70, 0x74, 0x79, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x1a, 0x1c, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2f, 0x61, 0x70, 0x69, 0x2f, 0x61,
-	0x6e, 0x6e, 0x6f, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x22, 0x30, 0x0a, 0x06, 0x50, 0x61, 0x63, 0x6b, 0x65, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74,
-	0x61, 0x74, 0x75, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74,
-	0x75, 0x73, 0x32, 0x88, 0x01, 0x0a, 0x04, 0x52, 0x49, 0x53, 0x50, 0x12, 0x4f, 0x0a, 0x04, 0x50,
-	0x69, 0x6e, 0x67, 0x12, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x16, 0x2e, 0x67, 0x6f,
-	0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d,
-	0x70, 0x74, 0x79, 0x22, 0x17, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x11, 0x12, 0x0f, 0x2f, 0x76, 0x31,
-	0x2f, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x3a, 0x70, 0x69, 0x6e, 0x67, 0x12, 0x2f, 0x0a, 0x07,
-	0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x12, 0x0f, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76,
-	0x31, 0x2e, 0x50, 0x61, 0x63, 0x6b, 0x65, 0x74, 0x1a, 0x0f, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e,
-	0x76, 0x31, 0x2e, 0x50, 0x61, 0x63, 0x6b, 0x65, 0x74, 0x28, 0x01, 0x30, 0x01, 0x42, 0x2c, 0x5a,
+	0x73, 0x70, 0x2e, 0x76, 0x31, 0x22, 0x7b, 0x0a, 0x07, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
+	0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04,
+	0x75, 0x75, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x77, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x12, 0x12, 0x0a, 0x04,
+	0x6d, 0x61, 0x73, 0x6b, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x6d, 0x61, 0x73, 0x6b,
+	0x12, 0x16, 0x0a, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c,
+	0x52, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c,
+	0x6f, 0x61, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f,
+	0x61, 0x64, 0x32, 0x39, 0x0a, 0x04, 0x52, 0x49, 0x53, 0x50, 0x12, 0x31, 0x0a, 0x07, 0x43, 0x6f,
+	0x6e, 0x6e, 0x65, 0x63, 0x74, 0x12, 0x10, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76, 0x31, 0x2e,
+	0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x1a, 0x10, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76,
+	0x31, 0x2e, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x28, 0x01, 0x30, 0x01, 0x42, 0x2c, 0x5a,
 	0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x73, 0x63, 0x68,
 	0x72, 0x69, 0x73, 0x74, 0x65, 0x6e, 0x73, 0x65, 0x6e, 0x2f, 0x72, 0x69, 0x73, 0x70, 0x2f, 0x61,
 	0x70, 0x69, 0x2f, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x2f, 0x67, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f,
@@ -121,16 +139,13 @@ func file_risp_proto_rawDescGZIP() []byte {
 
 var file_risp_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_risp_proto_goTypes = []interface{}{
-	(*Packet)(nil),        // 0: risp.v1.Packet
-	(*emptypb.Empty)(nil), // 1: google.protobuf.Empty
+	(*Message)(nil), // 0: risp.v1.Message
 }
 var file_risp_proto_depIdxs = []int32{
-	1, // 0: risp.v1.RISP.Ping:input_type -> google.protobuf.Empty
-	0, // 1: risp.v1.RISP.Connect:input_type -> risp.v1.Packet
-	1, // 2: risp.v1.RISP.Ping:output_type -> google.protobuf.Empty
-	0, // 3: risp.v1.RISP.Connect:output_type -> risp.v1.Packet
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	0, // 0: risp.v1.RISP.Connect:input_type -> risp.v1.Message
+	0, // 1: risp.v1.RISP.Connect:output_type -> risp.v1.Message
+	1, // [1:2] is the sub-list for method output_type
+	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -143,7 +158,7 @@ func file_risp_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_risp_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Packet); i {
+			switch v := v.(*Message); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -187,9 +202,7 @@ const _ = grpc.SupportPackageIsVersion6
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type RISPClient interface {
-	// Ping tells the caller if this service is ready to be called.
-	Ping(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// Update a batch based on a status
+	// Connect establishes a connection over which data is exchanged.
 	Connect(ctx context.Context, opts ...grpc.CallOption) (RISP_ConnectClient, error)
 }
 
@@ -199,15 +212,6 @@ type rISPClient struct {
 
 func NewRISPClient(cc grpc.ClientConnInterface) RISPClient {
 	return &rISPClient{cc}
-}
-
-func (c *rISPClient) Ping(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/risp.v1.RISP/Ping", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *rISPClient) Connect(ctx context.Context, opts ...grpc.CallOption) (RISP_ConnectClient, error) {
@@ -220,8 +224,8 @@ func (c *rISPClient) Connect(ctx context.Context, opts ...grpc.CallOption) (RISP
 }
 
 type RISP_ConnectClient interface {
-	Send(*Packet) error
-	Recv() (*Packet, error)
+	Send(*Message) error
+	Recv() (*Message, error)
 	grpc.ClientStream
 }
 
@@ -229,12 +233,12 @@ type rISPConnectClient struct {
 	grpc.ClientStream
 }
 
-func (x *rISPConnectClient) Send(m *Packet) error {
+func (x *rISPConnectClient) Send(m *Message) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *rISPConnectClient) Recv() (*Packet, error) {
-	m := new(Packet)
+func (x *rISPConnectClient) Recv() (*Message, error) {
+	m := new(Message)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -243,9 +247,7 @@ func (x *rISPConnectClient) Recv() (*Packet, error) {
 
 // RISPServer is the server API for RISP service.
 type RISPServer interface {
-	// Ping tells the caller if this service is ready to be called.
-	Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	// Update a batch based on a status
+	// Connect establishes a connection over which data is exchanged.
 	Connect(RISP_ConnectServer) error
 }
 
@@ -253,9 +255,6 @@ type RISPServer interface {
 type UnimplementedRISPServer struct {
 }
 
-func (*UnimplementedRISPServer) Ping(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
-}
 func (*UnimplementedRISPServer) Connect(RISP_ConnectServer) error {
 	return status.Errorf(codes.Unimplemented, "method Connect not implemented")
 }
@@ -264,31 +263,13 @@ func RegisterRISPServer(s *grpc.Server, srv RISPServer) {
 	s.RegisterService(&_RISP_serviceDesc, srv)
 }
 
-func _RISP_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RISPServer).Ping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/risp.v1.RISP/Ping",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RISPServer).Ping(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _RISP_Connect_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(RISPServer).Connect(&rISPConnectServer{stream})
 }
 
 type RISP_ConnectServer interface {
-	Send(*Packet) error
-	Recv() (*Packet, error)
+	Send(*Message) error
+	Recv() (*Message, error)
 	grpc.ServerStream
 }
 
@@ -296,12 +277,12 @@ type rISPConnectServer struct {
 	grpc.ServerStream
 }
 
-func (x *rISPConnectServer) Send(m *Packet) error {
+func (x *rISPConnectServer) Send(m *Message) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *rISPConnectServer) Recv() (*Packet, error) {
-	m := new(Packet)
+func (x *rISPConnectServer) Recv() (*Message, error) {
+	m := new(Message)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -311,12 +292,7 @@ func (x *rISPConnectServer) Recv() (*Packet, error) {
 var _RISP_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "risp.v1.RISP",
 	HandlerType: (*RISPServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Ping",
-			Handler:    _RISP_Ping_Handler,
-		},
-	},
+	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Connect",
