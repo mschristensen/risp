@@ -56,6 +56,12 @@ mocks:
 	@go generate ./...
 
 
+## proto:				Builds the proto files.
+.PHONY: proto
+proto:
+	@cd ./api/proto && $(MAKE) all && cd ../..
+
+
 ## build_dependencies:		Builds the application dependencies.
 .PHONY: build_dependencies
 build_dependencies:
