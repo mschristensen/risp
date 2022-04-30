@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package risp.v1;
+option go_package = "github.com/mschristensen/risp/api/build/go";
+
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+
+// RISP is a service that implements a RISP server.
+service RISP {
+  // Ping tells the caller if this service is ready to be called.
+  rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      get: "/v1/status:ping"
+    };
+  };
+
+  // Update a batch based on a status
+  rpc Connect(stream Packet) returns (stream Packet);
+}
+
+message Packet {
+  string id = 1;
+  string status = 2;
+}
