@@ -11,12 +11,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
+
+var logger logrus.FieldLogger = logrus.StandardLogger()
 
 type handler struct {
 	clientUUID uuid.UUID
 	session    session.Store
 	offset     uint16
+	done       bool
 }
 
 // HandlerCfg is configures a handler.
@@ -90,6 +94,10 @@ func (h *handler) handleMessage(ctx context.Context, msg *risppb.ClientMessage) 
 			Checksum: checksum.Sum(sess.Sequence...),
 		}, nil
 	case risppb.ConnectionState_CLOSED:
+		if err := h.session.Clear(h.clientUUID); err != nil {
+			return nil, errors.Wrap(err, "clear session failed")
+		}
+		h.done = true
 		return &risppb.ServerMessage{
 			State: risppb.ConnectionState_CLOSED,
 		}, nil
@@ -104,16 +112,34 @@ func (h *handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case msg := <-in:
+			return nil
+		case msg, ok := <-in:
+			if !ok || msg == nil {
+				return nil
+			}
+			logger.WithFields(logrus.Fields{
+				"uuid":   msg.Uuid,
+				"state":  msg.State.String(),
+				"ack":    msg.Ack,
+				"len":    msg.Len,
+				"window": msg.Window,
+			}).Info("received message")
 			response, err := h.handleMessage(ctx, msg)
 			if err != nil {
 				return errors.Wrap(err, "handle message failed")
 			}
 			if response != nil {
+				logger.WithFields(logrus.Fields{
+					"state":   response.State.String(),
+					"offset":  response.Offset,
+					"payload": response.Payload,
+				}).Info("sent message")
 				out <- response
 			}
 		case <-ticker.C:
+			if h.done {
+				return nil
+			}
 			sess, err := h.session.Get(h.clientUUID)
 			if err != nil {
 				return errors.Wrap(err, "get session failed")
@@ -123,13 +149,24 @@ func (h *handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out 
 			}
 			offset := make([]byte, 2)
 			binary.BigEndian.PutUint16(offset, h.offset)
-			out <- &risppb.ServerMessage{
+			msg := &risppb.ServerMessage{
 				State:   risppb.ConnectionState_CONNECTED,
 				Offset:  offset,
 				Payload: sess.Sequence[h.offset],
 			}
+			out <- msg
+			logger.WithFields(logrus.Fields{
+				"state":   msg.State.String(),
+				"offset":  msg.Offset,
+				"payload": msg.Payload,
+			}).Info("sent message")
 			h.offset++
 			// todo pause at window size
 		}
 	}
+}
+
+// IsDone returns true if the handler is done.
+func (h *handler) IsDone() bool {
+	return h.done
 }

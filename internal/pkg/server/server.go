@@ -8,6 +8,9 @@ import (
 	"risp/internal/pkg/session"
 	"sync"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -94,21 +97,25 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	if err != nil {
 		return errors.Wrap(err, "create handler failed")
 	}
+	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		if err := hdl.Run(ctx, in, out); err != nil {
 			logger.Fatalln(err, "run worker failed")
 		}
 	}()
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
 		defer close(in)
 		defer wg.Done()
 		for {
 			msg, err := srv.Recv()
+			if err != nil && status.Code(err) == codes.Canceled {
+				logger.WithField("uuid", clientUUID).Warning("client disconnected")
+				return
+			}
 			if err != nil {
-				// TODO handle reconnection
-				panic(err)
+				logger.Fatalln(err)
 			}
 			in <- msg
 		}

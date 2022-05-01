@@ -8,18 +8,21 @@ import (
 	"math/rand"
 
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
+	"risp/internal/pkg/checksum"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 var logger logrus.FieldLogger = logrus.StandardLogger()
 
 // DefaultWindowSize is the default window size for the client.
-const DefaultWindowSize = 1
+const DefaultWindowSize = 2
 
 // Client implements the client behaviour of RISP.
 type Client struct {
@@ -89,8 +92,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	var err error
 	c.conn, err = grpc.DialContext(ctx,
 		c.serverAddr,
-		// TODO: use TLS
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(insecure.NewCredentials()), // TODO: use TLS
 	)
 	if err != nil {
 		return errors.Wrapf(err, "connect to %s failed", c.serverAddr)
@@ -110,7 +112,10 @@ func (c *Client) sendRecv(ctx context.Context, in chan *risppb.ClientMessage) (c
 		defer close(out)
 		for {
 			msg, err := c.channel.Recv()
-			if err != nil {
+			if err != nil && status.Code(err) == codes.Canceled {
+				if c.done {
+					return
+				}
 				// TODO handle reconnection
 				panic(err)
 			}
@@ -201,6 +206,24 @@ func (c *Client) nextMessage() (*risppb.ClientMessage, error) {
 	return msg, nil
 }
 
+func (c *Client) Finish() error {
+	if !c.done {
+		return errors.New("client not finished")
+	}
+	if len(c.checksum) == 0 {
+		return errors.New("checksum not received")
+	}
+	if string(checksum.Sum(c.sequence...)) != string(c.checksum) {
+		return errors.New("checksum mismatch")
+	}
+	logger.WithFields(logrus.Fields{
+		"uuid":     c.uuid,
+		"sequence": c.sequence,
+		"checksum": c.checksum,
+	}).Info("client completed successfully")
+	return nil
+}
+
 // Run runs client-side RISP algorithm to receive the integer stream from the server.
 func (c *Client) Run(ctx context.Context) error {
 	outbox := make(chan *risppb.ClientMessage)
@@ -214,10 +237,17 @@ func (c *Client) Run(ctx context.Context) error {
 		return errors.Wrap(err, "next message failed")
 	}
 	outbox <- msg
+	logger.WithFields(logrus.Fields{
+		"uuid":   msg.Uuid,
+		"state":  msg.State.String(),
+		"ack":    msg.Ack,
+		"len":    msg.Len,
+		"window": msg.Window,
+	}).Info("sent message")
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		case msg := <-inbox:
 			logger.WithFields(logrus.Fields{
 				"state":    msg.State.String(),
@@ -229,6 +259,9 @@ func (c *Client) Run(ctx context.Context) error {
 				return errors.Wrap(err, "handle message failed")
 			}
 			if c.done {
+				if err := c.Finish(); err != nil {
+					return errors.Wrap(err, "finish failed")
+				}
 				return nil
 			}
 			if c.window == 0 { // OR timeout occurs!
@@ -239,8 +272,8 @@ func (c *Client) Run(ctx context.Context) error {
 				}
 				outbox <- msg
 				logger.WithFields(logrus.Fields{
-					"state":  msg.State.String(),
 					"uuid":   msg.Uuid,
+					"state":  msg.State.String(),
 					"ack":    msg.Ack,
 					"len":    msg.Len,
 					"window": msg.Window,

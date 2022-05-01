@@ -29,12 +29,12 @@ var (
 		Use:   "client",
 		Short: "Starts a RISP client.",
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) < 1 {
-				return errors.New("requires at least one argument")
+			if len(args) <= 1 {
+				return nil
 			}
 			_, err := strconv.ParseUint(args[0], 10, 16)
 			if err != nil {
-				return errors.Wrap(err, "parse number of messages argument failed")
+				return errors.Wrap(err, "parse sequence length argument failed")
 			}
 			return nil
 		},

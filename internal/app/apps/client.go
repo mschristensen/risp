@@ -2,6 +2,7 @@ package apps
 
 import (
 	"context"
+	"strconv"
 
 	"risp/internal"
 	"risp/internal/pkg/client"
@@ -38,10 +39,19 @@ func NewClientApp(cfgs ...ClientAppCfg) (*ClientApp, error) {
 }
 
 func (app *ClientApp) Run(ctx context.Context, args []string) error {
-	c, err := client.NewClient(
-		client.WithSequenceLength(4),
+	cfgs := []client.ClientCfg{
 		client.WithServerPort(app.Port),
-	)
+	}
+	if len(args) > 1 {
+		sequenceLength, err := strconv.ParseUint(args[1], 10, 16)
+		if err != nil {
+			return errors.Wrap(err, "parse sequence length argument failed")
+		}
+		cfgs = append(cfgs, client.WithSequenceLength(uint16(sequenceLength)))
+	} else {
+		cfgs = append(cfgs, client.WithRandomSequenceLength())
+	}
+	c, err := client.NewClient(cfgs...)
 	if err != nil {
 		return errors.Wrap(err, "create client failed")
 	}
@@ -51,5 +61,5 @@ func (app *ClientApp) Run(ctx context.Context, args []string) error {
 	if err := c.Run(ctx); err != nil {
 		return errors.Wrap(err, "run client failed")
 	}
-	return errors.New("not implemented")
+	return nil
 }
