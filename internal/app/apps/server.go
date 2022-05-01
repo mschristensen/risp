@@ -46,15 +46,16 @@ func NewServerApp(cfgs ...ServerAppCfg) (*ServerApp, error) {
 	return app, nil
 }
 
-func (app *ServerApp) Run(ctx context.Context, args []string) error {
-	server, err := server.NewServer(
+// Run runs the demo RISP server application.
+func (app *ServerApp) Run(ctx context.Context, _ []string) error {
+	srv, err := server.NewServer(
 		server.WithSessionStore(session.NewMemoryStore()),
 	)
 	if err != nil {
 		return errors.Wrap(err, "new server failed")
 	}
 	grpcServer := grpc.NewServer()
-	risppb.RegisterRISPServer(grpcServer, server)
+	risppb.RegisterRISPServer(grpcServer, srv)
 
 	// stop the server when the context is done
 	go func() {

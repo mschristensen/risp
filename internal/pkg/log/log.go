@@ -36,6 +36,7 @@ func SetLogger(level string) {
 	}
 }
 
+// ClientMessageToFields converts a client message to logrus.Fields.
 func ClientMessageToFields(msg *risppb.ClientMessage) logrus.Fields {
 	id, err := uuid.FromBytes(msg.Uuid)
 	if err != nil {
@@ -50,6 +51,7 @@ func ClientMessageToFields(msg *risppb.ClientMessage) logrus.Fields {
 	}
 }
 
+// ServerMessageToFields converts a server message to logrus.Fields.
 func ServerMessageToFields(msg *risppb.ServerMessage) logrus.Fields {
 	return logrus.Fields{
 		"state":    msg.State.String(),

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
-	"risp/internal/pkg/handler"
 	"risp/internal/pkg/log"
 	"risp/internal/pkg/session"
 	"sync"
@@ -13,28 +12,26 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
-var logger logrus.FieldLogger = logrus.StandardLogger()
-
+// Server implements a gRPC server that handles client connections.
 type Server struct {
-	session session.Store
+	store session.Store
 }
 
-// ServerCfg configures a Server.
-type ServerCfg func(*Server) error
+// Cfg configures a Server.
+type Cfg func(*Server) error
 
 // WithSessionStore sets the session store for the server.
-func WithSessionStore(store session.Store) ServerCfg {
+func WithSessionStore(store session.Store) Cfg {
 	return func(s *Server) error {
-		s.session = store
+		s.store = store
 		return nil
 	}
 }
 
 // NewServer creates a new Server with the given configuration.
-func NewServer(cfgs ...ServerCfg) (*Server, error) {
+func NewServer(cfgs ...Cfg) (*Server, error) {
 	server := &Server{}
 	for _, cfg := range cfgs {
 		if err := cfg(server); err != nil {
@@ -44,6 +41,7 @@ func NewServer(cfgs ...ServerCfg) (*Server, error) {
 	return server, nil
 }
 
+// Connect implements the gRPC endpoint for establishing a bidirectional stream connection.
 func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -65,16 +63,16 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	logger.WithFields(log.ClientMessageToFields(msg)).Info("received message")
 
 	// load existing session state for client, or create new session state if none exists
-	sess, err := s.session.Get(clientUUID)
+	sess, err := s.store.Get(clientUUID)
 	if err != nil {
 		if !errors.Is(err, session.ErrSessionNotFound) {
 			return errors.Wrap(err, "get session failed")
 		}
 		logger.WithField("uuid", clientUUID.String()).Info("welcoming a brand new client")
-		if err := s.session.New(clientUUID, uint16(msg.Len)); err != nil {
+		if err := s.store.New(clientUUID, uint16(msg.Len)); err != nil {
 			return errors.Wrap(err, "new session failed")
 		}
-		sess, err = s.session.Get(clientUUID)
+		sess, err = s.store.Get(clientUUID)
 		if err != nil {
 			return errors.Wrap(err, "get session after creating it failed")
 		}
@@ -90,25 +88,18 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	// update the session state accoriding to what this client knows
 	sess.Ack = uint16(msg.Ack)
 	sess.Window = uint16(msg.Window)
-	if err = s.session.Set(clientUUID, sess); err != nil {
+	if err = s.store.Set(clientUUID, sess); err != nil {
 		return errors.Wrap(err, "set session failed")
 	}
 
 	// create a new handler instance to manage messages on this connection
 	in := make(chan *risppb.ClientMessage)
 	out := make(chan *risppb.ServerMessage)
-	hdl, err := handler.NewHandler(
-		handler.WithClientUUID(clientUUID),
-		handler.WithSessionStore(s.session),
-	)
-	if err != nil {
-		return errors.Wrap(err, "create handler failed")
-	}
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if err := hdl.Run(ctx, in, out); err != nil {
+		if err := NewHandler(clientUUID, s.store).Run(ctx, in, out); err != nil {
 			logger.Fatalln(err, "run worker failed")
 		}
 	}()

@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Sequence is the sequence of numbers to transmit using the RISP protocol.
 type Sequence []*uint32
 
 func (s Sequence) String() string {

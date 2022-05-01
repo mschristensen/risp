@@ -1,3 +1,4 @@
+// Package checksum implements logic to produce a checksum from a sequence.
 package checksum
 
 import (

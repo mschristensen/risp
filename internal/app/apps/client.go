@@ -38,8 +38,9 @@ func NewClientApp(cfgs ...ClientAppCfg) (*ClientApp, error) {
 	return app, nil
 }
 
+// Run runs the demo RISP client application.
 func (app *ClientApp) Run(ctx context.Context, args []string) error {
-	cfgs := []client.ClientCfg{
+	cfgs := []client.Cfg{
 		client.WithServerPort(app.Port),
 	}
 	if len(args) > 1 {

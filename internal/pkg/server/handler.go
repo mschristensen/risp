@@ -1,4 +1,4 @@
-package handler
+package server
 
 import (
 	"context"
@@ -16,7 +16,8 @@ import (
 
 var logger logrus.FieldLogger = logrus.StandardLogger()
 
-type handler struct {
+// Handler implements RISP for a specific client.
+type Handler struct {
 	clientUUID uuid.UUID
 	store      session.Store
 	session    session.Session // current session state
@@ -25,37 +26,16 @@ type handler struct {
 	done    bool
 }
 
-// HandlerCfg is configures a handler.
-type HandlerCfg func(*handler) error
-
-// WithSessionStore sets the session store.
-func WithSessionStore(store session.Store) HandlerCfg {
-	return func(w *handler) error {
-		w.store = store
-		return nil
-	}
-}
-
-// WithClientUUID sets the client uuid.
-func WithClientUUID(clientUUID uuid.UUID) HandlerCfg {
-	return func(w *handler) error {
-		w.clientUUID = clientUUID
-		return nil
-	}
-}
-
 // NewHandler creates a new handler.
-func NewHandler(cfgs ...HandlerCfg) (*handler, error) {
-	h := &handler{}
-	for _, cfg := range cfgs {
-		if err := cfg(h); err != nil {
-			return nil, errors.Wrap(err, "apply handler cfg failed")
-		}
+func NewHandler(clientUUID uuid.UUID, store session.Store) *Handler {
+	return &Handler{
+		clientUUID: clientUUID,
+		store:      store,
 	}
-	return h, nil
 }
 
-func (h *handler) handleMessage(ctx context.Context, msg *risppb.ClientMessage) error {
+// handleMessage updates the server state based on the client message.
+func (h *Handler) handleMessage(msg *risppb.ClientMessage) error {
 	switch msg.State {
 	case risppb.ConnectionState_CONNECTING, risppb.ConnectionState_CONNECTED:
 		// update session state according to the client message
@@ -83,7 +63,7 @@ func (h *handler) handleMessage(ctx context.Context, msg *risppb.ClientMessage) 
 }
 
 // nextMessage prepares the next message to send to the client based on the current handler state.
-func (h *handler) nextMessage() (*risppb.ServerMessage, error) {
+func (h *Handler) nextMessage() (*risppb.ServerMessage, error) {
 	msg := &risppb.ServerMessage{
 		State: risppb.ConnectionState_CONNECTED,
 	}
@@ -114,7 +94,7 @@ func (h *handler) nextMessage() (*risppb.ServerMessage, error) {
 }
 
 // Run runs the handler.
-func (h *handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out chan<- *risppb.ServerMessage) error {
+func (h *Handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out chan<- *risppb.ServerMessage) error {
 	defer close(out)
 	ticker := time.NewTicker(time.Second)
 
@@ -134,7 +114,7 @@ func (h *handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out 
 				return nil
 			}
 			logger.WithFields(log.ClientMessageToFields(msg)).Info("received message")
-			if err := h.handleMessage(ctx, msg); err != nil {
+			if err := h.handleMessage(msg); err != nil {
 				return errors.Wrap(err, "handle message failed")
 			}
 		case <-ticker.C:
@@ -150,9 +130,4 @@ func (h *handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out 
 			}
 		}
 	}
-}
-
-// IsDone returns true if the handler is done.
-func (h *handler) IsDone() bool {
-	return h.done
 }

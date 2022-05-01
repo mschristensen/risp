@@ -1,0 +1,113 @@
+linters-settings:
+  govet:
+    settings:
+      printf:
+        funcs:
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
+    disable:
+      - fieldalignment
+  gocyclo:
+    min-complexity: 15
+  maligned:
+    suggest-new: true
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  misspell:
+    locale: UK
+  lll:
+    line-length: 140
+  goimports:
+    local-prefixes: github.com/golangci/golangci-lint
+  dupl:
+    threshold: 200 # tokens count to trigger issue, default 150
+  gocognit:
+    min-complexity: 60
+  gocyclo:
+    min-complexity: 30
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - opinionated
+      - performance
+      - style
+    disabled-tags:
+      - experimental
+  funlen:
+    lines: 100
+    statements: 50
+  godot:
+    capital: true
+  unparam:
+    check-exported: true
+
+issues:
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec # security check is not important in tests
+        - dupl # we sometimes duplicate code in tests
+        - bodyclose
+        - unparam
+  fix: true
+  exclude-use-default: false
+
+run:
+  skip-dirs:
+    - tmp
+    - bin
+    - scripts
+    - third_party
+
+  tests: true
+  build-tags:
+    - integration
+
+linters:
+  disable-all: true
+  fast: true
+  enable:
+    - asciicheck
+    - bodyclose
+    - deadcode
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - errorlint
+    - exportloopref
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - golint
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - misspell
+    - nakedret
+    - nestif
+    - prealloc
+    - rowserrcheck
+    - scopelint
+    - staticcheck
+    - stylecheck
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+    - wrapcheck
+
+# golangci.com configuration
+# https://github.com/golangci/golangci/wiki/Configuration
+service:
+  golangci-lint-version: 1.38.x
+  prepare:
+    - echo "here I can run custom commands, but no preparation needed for this repo"

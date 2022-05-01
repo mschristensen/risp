@@ -23,10 +23,8 @@ import (
 
 var logger logrus.FieldLogger = logrus.StandardLogger()
 
-// TODO handle window size that is not a factor of sequence length
-
 // DefaultWindowSize is the default window size for the client.
-const DefaultWindowSize = 3
+const DefaultWindowSize = 4
 
 // Client implements the client behaviour of RISP.
 type Client struct {
@@ -43,11 +41,11 @@ type Client struct {
 	channel risppb.RISP_ConnectClient
 }
 
-// ClientCfg configures a Client.
-type ClientCfg func(*Client) error
+// Cfg configures a Client.
+type Cfg func(*Client) error
 
 // WithServerPort sets the server port to connect to.
-func WithServerPort(p uint16) ClientCfg {
+func WithServerPort(p uint16) Cfg {
 	return func(c *Client) error {
 		c.serverAddr = fmt.Sprintf("localhost:%d", p)
 		return nil
@@ -55,7 +53,7 @@ func WithServerPort(p uint16) ClientCfg {
 }
 
 // WithSequenceLength sets the length of the sequence.
-func WithSequenceLength(l uint16) ClientCfg {
+func WithSequenceLength(l uint16) Cfg {
 	return func(c *Client) error {
 		c.session.Sequence = make([]*uint32, l)
 		return nil
@@ -63,15 +61,15 @@ func WithSequenceLength(l uint16) ClientCfg {
 }
 
 // WithRandomSequenceLength sets the sequence length to a random non-zero value in the supported range.
-func WithRandomSequenceLength() ClientCfg {
+func WithRandomSequenceLength() Cfg {
 	return func(c *Client) error {
-		c.session.Sequence = make([]*uint32, rand.Intn(math.MaxUint16)+1)
+		c.session.Sequence = make([]*uint32, rand.Intn(math.MaxUint16)+1) // nolint: gosec // we don't need high security here
 		return nil
 	}
 }
 
 // NewClient creates a new Client with the given configuration.
-func NewClient(cfgs ...ClientCfg) (*Client, error) {
+func NewClient(cfgs ...Cfg) (*Client, error) {
 	client := &Client{}
 	for _, cfg := range cfgs {
 		if err := cfg(client); err != nil {
@@ -108,7 +106,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 // sendRecv sends messages to the server that are received on the inbound channel,
 // and receives messages from the server and sends them on the returned on the outbound channel.
-func (c *Client) sendRecv(ctx context.Context, in chan *risppb.ClientMessage) (chan *risppb.ServerMessage, error) {
+func (c *Client) sendRecv(_ context.Context, in chan *risppb.ClientMessage) chan *risppb.ServerMessage {
 	out := make(chan *risppb.ServerMessage)
 	go func() {
 		defer close(out)
@@ -132,11 +130,11 @@ func (c *Client) sendRecv(ctx context.Context, in chan *risppb.ClientMessage) (c
 			}
 		}
 	}()
-	return out, nil
+	return out
 }
 
 // handleMessage updates the client state using the message from the server.
-func (c *Client) handleMessage(ctx context.Context, msg *risppb.ServerMessage) error {
+func (c *Client) handleMessage(_ context.Context, msg *risppb.ServerMessage) error {
 	if msg.State == risppb.ConnectionState_CLOSING {
 		if c.session.Ack != uint16(len(c.session.Sequence)) {
 			return errors.New("received closing message before all items received")
@@ -179,7 +177,7 @@ func (c *Client) handleMessage(ctx context.Context, msg *risppb.ServerMessage) e
 }
 
 // nextMessage prepares the next message to send to the server based on the current client state.
-func (c *Client) nextMessage() (*risppb.ClientMessage, error) {
+func (c *Client) nextMessage() *risppb.ClientMessage {
 	msg := &risppb.ClientMessage{
 		State: risppb.ConnectionState_CONNECTED,
 		Uuid:  c.uuid[:],
@@ -192,47 +190,42 @@ func (c *Client) nextMessage() (*risppb.ClientMessage, error) {
 	if !c.started {
 		msg.State = risppb.ConnectionState_CONNECTING
 		c.started = true
-		return msg, nil
+		return msg
 	}
 	if c.closing && c.checksum != nil {
 		msg.State = risppb.ConnectionState_CLOSED
-		return msg, nil
+		return msg
 	}
 	if c.checksum == nil && c.session.Ack == uint16(len(c.session.Sequence)) {
 		msg.State = risppb.ConnectionState_CLOSING
-		return msg, nil
+		return msg
 	}
-	return msg, nil
+	return msg
 }
 
-func (c *Client) sendNextMessage(out chan *risppb.ClientMessage) error {
-	msg, err := c.nextMessage()
-	if err != nil {
-		return errors.Wrap(err, "next message failed")
-	}
-	out <- msg
-	logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
-	return nil
-}
-
+// Finish checks the client has correctly received the sequence from the server
+// and logs the result.
 func (c *Client) Finish() error {
+	if err := c.conn.Close(); err != nil {
+		return errors.Wrap(err, "close client connection failed")
+	}
 	if !c.done {
-		return errors.New("client not finished")
+		return ErrNotDone
 	}
 	if c.checksum == nil {
-		return errors.New("checksum not received")
+		return ErrMissingChecksum
 	}
 	sum, err := checksum.Sum(c.session.Sequence...)
 	if err != nil {
 		return errors.Wrap(err, "checksum failed")
 	}
 	if sum != *c.checksum {
-		return errors.New("checksum mismatch")
+		return ErrChecksumMismatch
 	}
 	logger.WithFields(logrus.Fields{
 		"uuid":     c.uuid.String(),
 		"sequence": c.session.Sequence,
-		"checksum": c.checksum,
+		"checksum": *c.checksum,
 	}).Info("client completed successfully")
 	return nil
 }
@@ -241,16 +234,16 @@ func (c *Client) Finish() error {
 func (c *Client) Run(ctx context.Context) error {
 	out := make(chan *risppb.ClientMessage)
 	defer close(out)
-	in, err := c.sendRecv(ctx, out)
-	if err != nil {
-		return errors.Wrap(err, "connect failed")
-	}
-	msg, err := c.nextMessage()
-	if err != nil {
-		return errors.Wrap(err, "next message failed")
-	}
+	in := c.sendRecv(ctx, out)
+
+	// initiate handshake
+	msg := c.nextMessage()
 	out <- msg
 	logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
+
+	// The client ticker is longer than the server ticker, so that we don't see duplicate messages.
+	// Increasing this value can simulate what happens when messages arrive late from the server,
+	// causing the client to retry messages.
 	ticker := time.NewTicker(2 * time.Second)
 	for {
 		select {
@@ -272,10 +265,10 @@ func (c *Client) Run(ctx context.Context) error {
 			}
 		case <-ticker.C:
 			if c.session.Window == 0 || c.session.Ack == uint16(len(c.session.Sequence)) {
-				c.session.Window = DefaultWindowSize // TODO dynamically size
-				if err := c.sendNextMessage(out); err != nil {
-					return errors.Wrap(err, "send next message failed")
-				}
+				c.session.Window = DefaultWindowSize // TODO: it would be nice to dynamically size this based on connection stability
+				msg := c.nextMessage()
+				out <- msg
+				logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
 			}
 		}
 	}

@@ -48,7 +48,7 @@ var (
 	}
 )
 
-func newApp(ctx context.Context, cmd *cobra.Command, args []string) (apps.App, []string, error) {
+func newApp(_ context.Context, cmd *cobra.Command, args []string) (apps.App, []string, error) {
 	var err error
 	var app apps.App
 	switch cmd.Name() {
@@ -84,7 +84,7 @@ func runCmd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Wrapf(err, "new %s app failed", cmd.Name())
 	}
-	return app.Run(ctx, args)
+	return errors.Wrap(app.Run(ctx, args), "run app failed")
 }
 
 func envCheck(ctx context.Context) error {
