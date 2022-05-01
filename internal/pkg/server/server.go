@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
-	"encoding/binary"
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
 	"risp/internal/pkg/handler"
+	"risp/internal/pkg/log"
 	"risp/internal/pkg/session"
 	"sync"
 
@@ -47,6 +47,7 @@ func NewServer(cfgs ...ServerCfg) (*Server, error) {
 func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	logger.Info("new connection established")
 
 	// first, we expect to receive a client handshake with the clientUUID
 	// and expected sequence length
@@ -61,10 +62,15 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	if err != nil {
 		return errors.Wrap(err, "parse client UUID failed")
 	}
+	logger.WithFields(log.ClientMessageToFields(msg)).Info("received message")
 
 	// load existing session state for client, or create new session state if none exists
 	sess, err := s.session.Get(clientUUID)
-	if err != nil && errors.Is(err, session.ErrSessionNotFound) {
+	if err != nil {
+		if !errors.Is(err, session.ErrSessionNotFound) {
+			return errors.Wrap(err, "get session failed")
+		}
+		logger.WithField("uuid", clientUUID.String()).Info("welcoming a brand new client")
 		if err := s.session.New(clientUUID, uint16(msg.Len)); err != nil {
 			return errors.Wrap(err, "new session failed")
 		}
@@ -72,22 +78,23 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 		if err != nil {
 			return errors.Wrap(err, "get session after creating it failed")
 		}
+	} else {
+		logger.WithField("uuid", clientUUID.String()).Info("welcoming back an old client")
 	}
+
+	// if the client is reconnecting, the sequence length must match the expected sequence length
 	if len(sess.Sequence) != int(msg.Len) {
 		return errors.New("sequence length mismatch")
 	}
-	// update the session state
-	var ack, window uint16
-	if len(msg.Ack) > 0 {
-		ack = binary.BigEndian.Uint16(msg.Ack)
-	}
-	if len(msg.Window) > 0 {
-		window = binary.BigEndian.Uint16(msg.Window)
-	}
-	if err = s.session.Set(clientUUID, ack, window); err != nil {
+
+	// update the session state accoriding to what this client knows
+	sess.Ack = uint16(msg.Ack)
+	sess.Window = uint16(msg.Window)
+	if err = s.session.Set(clientUUID, sess); err != nil {
 		return errors.Wrap(err, "set session failed")
 	}
 
+	// create a new handler instance to manage messages on this connection
 	in := make(chan *risppb.ClientMessage)
 	out := make(chan *risppb.ServerMessage)
 	hdl, err := handler.NewHandler(

@@ -2,13 +2,15 @@ package client
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
+	"time"
 
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
 	"risp/internal/pkg/checksum"
+	"risp/internal/pkg/log"
+	"risp/internal/pkg/session"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -21,20 +23,21 @@ import (
 
 var logger logrus.FieldLogger = logrus.StandardLogger()
 
+// TODO handle window size that is not a factor of sequence length
+
 // DefaultWindowSize is the default window size for the client.
-const DefaultWindowSize = 2
+const DefaultWindowSize = 3
 
 // Client implements the client behaviour of RISP.
 type Client struct {
-	serverAddr     string
-	uuid           uuid.UUID
-	window         uint16 // TODO handle window size that is not a factor of sequence length
-	ack            uint16
-	sequenceLength uint16
-	sequence       []uint32
-	checksum       []byte
-	started        bool
-	done           bool
+	serverAddr string
+	uuid       uuid.UUID
+	session    session.Session
+
+	started  bool
+	closing  bool
+	done     bool
+	checksum *uint64
 
 	conn    *grpc.ClientConn
 	channel risppb.RISP_ConnectClient
@@ -54,7 +57,7 @@ func WithServerPort(p uint16) ClientCfg {
 // WithSequenceLength sets the length of the sequence.
 func WithSequenceLength(l uint16) ClientCfg {
 	return func(c *Client) error {
-		c.sequenceLength = l
+		c.session.Sequence = make([]*uint32, l)
 		return nil
 	}
 }
@@ -62,7 +65,7 @@ func WithSequenceLength(l uint16) ClientCfg {
 // WithRandomSequenceLength sets the sequence length to a random non-zero value in the supported range.
 func WithRandomSequenceLength() ClientCfg {
 	return func(c *Client) error {
-		c.sequenceLength = uint16(rand.Intn(math.MaxUint16) + 1)
+		c.session.Sequence = make([]*uint32, rand.Intn(math.MaxUint16)+1)
 		return nil
 	}
 }
@@ -75,9 +78,8 @@ func NewClient(cfgs ...ClientCfg) (*Client, error) {
 			return nil, errors.Wrap(err, "apply Client cfg failed")
 		}
 	}
-	client.sequence = make([]uint32, client.sequenceLength)
 	client.uuid = uuid.New()
-	client.window = DefaultWindowSize
+	client.session.Window = DefaultWindowSize
 	return client, nil
 }
 
@@ -133,102 +135,113 @@ func (c *Client) sendRecv(ctx context.Context, in chan *risppb.ClientMessage) (c
 	return out, nil
 }
 
-// handleMessage handles a message from the server.
+// handleMessage updates the client state using the message from the server.
 func (c *Client) handleMessage(ctx context.Context, msg *risppb.ServerMessage) error {
 	if msg.State == risppb.ConnectionState_CLOSING {
-		if c.ack != 1<<c.sequenceLength-1 {
+		if c.session.Ack != uint16(len(c.session.Sequence)) {
 			return errors.New("received closing message before all items received")
 		}
-		c.checksum = msg.Checksum
-		c.window = 0
+		c.closing = true
+		sum, err := checksum.Sum(c.session.Sequence...)
+		if err != nil {
+			return errors.Wrap(err, "calculate checksum failed")
+		}
+		c.checksum = &sum
 		return nil
 	}
 	if msg.State == risppb.ConnectionState_CLOSED {
-		if c.ack != 1<<c.sequenceLength-1 {
+		if c.session.Ack != uint16(len(c.session.Sequence)) {
 			return errors.New("received closed message before all items received")
 		}
-		if len(c.checksum) == 0 {
+		if c.checksum == nil {
 			return errors.New("received closed message before checksum received")
 		}
-		c.window = 0
 		c.done = true
 		return nil
 	}
-	var sequenceIndex uint16
-	if len(msg.Offset) > 0 {
-		sequenceIndex = binary.BigEndian.Uint16(msg.Offset)
-		// update record of what we have seen
-		c.ack |= (1 << sequenceIndex) // TODO: use a more efficient encoding scheme
-	}
+
 	// store the item at the correct place in the sequence, as described by the offset
-	c.sequence[sequenceIndex] = msg.Payload
+	c.session.Sequence[msg.Index] = &msg.Payload
+
+	// update ack to reflect the index of the first missing value
+	c.session.Ack = uint16(len(c.session.Sequence))
+	for i := range c.session.Sequence {
+		if c.session.Sequence[i] == nil {
+			c.session.Ack = uint16(i)
+			break
+		}
+	}
+
 	// reduce the window size
-	c.window--
+	c.session.Window--
+
 	return nil
 }
 
 // nextMessage prepares the next message to send to the server based on the current client state.
 func (c *Client) nextMessage() (*risppb.ClientMessage, error) {
 	msg := &risppb.ClientMessage{
-		Uuid: c.uuid[:],
-		Len:  uint32(c.sequenceLength),
+		State: risppb.ConnectionState_CONNECTED,
+		Uuid:  c.uuid[:],
+		Len:   uint32(len(c.session.Sequence)),
 	}
+
+	msg.Window = uint32(c.session.Window)
+	msg.Ack = uint32(c.session.Ack)
 
 	if !c.started {
 		msg.State = risppb.ConnectionState_CONNECTING
 		c.started = true
 		return msg, nil
 	}
-	if len(c.checksum) > 0 {
+	if c.closing && c.checksum != nil {
 		msg.State = risppb.ConnectionState_CLOSED
 		return msg, nil
 	}
-	if c.ack == 1<<c.sequenceLength-1 {
+	if c.checksum == nil && c.session.Ack == uint16(len(c.session.Sequence)) {
 		msg.State = risppb.ConnectionState_CLOSING
 		return msg, nil
 	}
-	msg.State = risppb.ConnectionState_CONNECTED
-
-	bs, err := c.uuid.MarshalBinary()
-	if err != nil {
-		return nil, errors.Wrap(err, "uuid marshal failed")
-	}
-	msg.Uuid = bs
-
-	window := make([]byte, 2)
-	binary.BigEndian.PutUint16(window, c.window)
-	msg.Window = window
-
-	ack := make([]byte, 2)
-	binary.BigEndian.PutUint16(ack, c.ack)
-	msg.Ack = ack
-
 	return msg, nil
+}
+
+func (c *Client) sendNextMessage(out chan *risppb.ClientMessage) error {
+	msg, err := c.nextMessage()
+	if err != nil {
+		return errors.Wrap(err, "next message failed")
+	}
+	out <- msg
+	logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
+	return nil
 }
 
 func (c *Client) Finish() error {
 	if !c.done {
 		return errors.New("client not finished")
 	}
-	if len(c.checksum) == 0 {
+	if c.checksum == nil {
 		return errors.New("checksum not received")
 	}
-	if string(checksum.Sum(c.sequence...)) != string(c.checksum) {
+	sum, err := checksum.Sum(c.session.Sequence...)
+	if err != nil {
+		return errors.Wrap(err, "checksum failed")
+	}
+	if sum != *c.checksum {
 		return errors.New("checksum mismatch")
 	}
 	logger.WithFields(logrus.Fields{
-		"uuid":     c.uuid,
-		"sequence": c.sequence,
+		"uuid":     c.uuid.String(),
+		"sequence": c.session.Sequence,
 		"checksum": c.checksum,
 	}).Info("client completed successfully")
 	return nil
 }
 
-// Run runs client-side RISP algorithm to receive the integer stream from the server.
+// Run runs client-side RISP protocol to receive the integer stream from the server.
 func (c *Client) Run(ctx context.Context) error {
-	outbox := make(chan *risppb.ClientMessage)
-	defer close(outbox)
-	inbox, err := c.sendRecv(ctx, outbox)
+	out := make(chan *risppb.ClientMessage)
+	defer close(out)
+	in, err := c.sendRecv(ctx, out)
 	if err != nil {
 		return errors.Wrap(err, "connect failed")
 	}
@@ -236,25 +249,18 @@ func (c *Client) Run(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "next message failed")
 	}
-	outbox <- msg
-	logger.WithFields(logrus.Fields{
-		"uuid":   msg.Uuid,
-		"state":  msg.State.String(),
-		"ack":    msg.Ack,
-		"len":    msg.Len,
-		"window": msg.Window,
-	}).Info("sent message")
+	out <- msg
+	logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
+	ticker := time.NewTicker(2 * time.Second)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case msg := <-inbox:
-			logger.WithFields(logrus.Fields{
-				"state":    msg.State.String(),
-				"offset":   msg.Offset,
-				"payload":  msg.Payload,
-				"checksum": msg.Checksum,
-			}).Info("received message")
+		case msg, ok := <-in:
+			if !ok || msg == nil {
+				return nil
+			}
+			logger.WithFields(log.ServerMessageToFields(msg)).Info("received message")
 			if err := c.handleMessage(ctx, msg); err != nil {
 				return errors.Wrap(err, "handle message failed")
 			}
@@ -264,20 +270,12 @@ func (c *Client) Run(ctx context.Context) error {
 				}
 				return nil
 			}
-			if c.window == 0 { // OR timeout occurs!
-				c.window = DefaultWindowSize // TODO dynamically size
-				msg, err := c.nextMessage()
-				if err != nil {
-					return errors.Wrap(err, "next message failed")
+		case <-ticker.C:
+			if c.session.Window == 0 || c.session.Ack == uint16(len(c.session.Sequence)) {
+				c.session.Window = DefaultWindowSize // TODO dynamically size
+				if err := c.sendNextMessage(out); err != nil {
+					return errors.Wrap(err, "send next message failed")
 				}
-				outbox <- msg
-				logger.WithFields(logrus.Fields{
-					"uuid":   msg.Uuid,
-					"state":  msg.State.String(),
-					"ack":    msg.Ack,
-					"len":    msg.Len,
-					"window": msg.Window,
-				}).Info("sent message")
 			}
 		}
 	}

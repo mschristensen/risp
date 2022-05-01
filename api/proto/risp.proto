@@ -20,13 +20,13 @@ message ClientMessage {
   ConnectionState state = 1;
   uint32 len = 2;
   bytes uuid = 3;
-  bytes window = 4;
-  bytes ack = 5;
+  uint32 window = 4;
+  uint32 ack = 5;
 }
 
 message ServerMessage {
   ConnectionState state = 1;
-  bytes offset = 2;
+  uint32 index = 2;
   uint32 payload = 3;
-  bytes checksum = 4;
+  uint64 checksum = 4;
 }

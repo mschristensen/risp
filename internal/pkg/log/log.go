@@ -5,8 +5,13 @@ import (
 	"strings"
 	"time"
 
+	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
+
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
+
+var logger logrus.FieldLogger = logrus.StandardLogger()
 
 // SetLogger sets the default logger's level.
 func SetLogger(level string) {
@@ -28,5 +33,28 @@ func SetLogger(level string) {
 		logrus.SetLevel(logrus.ErrorLevel)
 	default:
 		logrus.SetLevel(logrus.ErrorLevel)
+	}
+}
+
+func ClientMessageToFields(msg *risppb.ClientMessage) logrus.Fields {
+	id, err := uuid.FromBytes(msg.Uuid)
+	if err != nil {
+		logger.Fatalln(err)
+	}
+	return logrus.Fields{
+		"uuid":   id.String(),
+		"state":  msg.State.String(),
+		"ack":    msg.Ack,
+		"len":    msg.Len,
+		"window": msg.Window,
+	}
+}
+
+func ServerMessageToFields(msg *risppb.ServerMessage) logrus.Fields {
+	return logrus.Fields{
+		"state":    msg.State.String(),
+		"index":    msg.Index,
+		"payload":  msg.Payload,
+		"checksum": msg.Checksum,
 	}
 }

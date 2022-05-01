@@ -11,12 +11,12 @@ import (
 type Store interface {
 	New(clientUUID uuid.UUID, sequenceLength uint16) error
 	Get(clientUUID uuid.UUID) (Session, error)
-	Set(clientUUID uuid.UUID, ack, window uint16) error
+	Set(clientUUID uuid.UUID, session Session) error
 	Clear(clientUUID uuid.UUID) error
 }
 
 type Session struct {
-	Sequence []uint32
+	Sequence Sequence
 	Ack      uint16
 	Window   uint16
 }
@@ -39,11 +39,12 @@ func (p *MemoryStore) New(clientUUID uuid.UUID, sequenceLength uint16) error {
 		return ErrSessionAlreadyExists
 	}
 	p.sessions[clientUUID] = Session{
-		Sequence: make([]uint32, sequenceLength),
+		Sequence: make([]*uint32, sequenceLength),
 	}
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 	for i := uint16(0); i < sequenceLength; i++ {
-		p.sessions[clientUUID].Sequence[i] = r.Uint32()
+		x := r.Uint32()
+		p.sessions[clientUUID].Sequence[i] = &x
 	}
 	return nil
 }
@@ -57,16 +58,13 @@ func (p *MemoryStore) Get(clientUUID uuid.UUID) (Session, error) {
 	return Session{}, ErrSessionNotFound
 }
 
-func (p *MemoryStore) Set(clientUUID uuid.UUID, ack, window uint16) error {
+func (p *MemoryStore) Set(clientUUID uuid.UUID, session Session) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if _, ok := p.sessions[clientUUID]; !ok {
 		return ErrSessionNotFound
 	}
-	cpy := p.sessions[clientUUID]
-	cpy.Ack = ack
-	cpy.Window = window
-	p.sessions[clientUUID] = cpy
+	p.sessions[clientUUID] = session
 	return nil
 }
 
