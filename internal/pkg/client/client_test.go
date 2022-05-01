@@ -34,11 +34,11 @@ func TestRun(t *testing.T) {
 		}, nil).Once()
 	}
 	mockChannel.On("Recv").Return(&risppb.ServerMessage{
-		State:    risppb.ConnectionState_FINALISING,
+		State:    risppb.ConnectionState_CLOSING,
 		Checksum: checksum.Sum(sequence...),
 	}, nil).Once()
 	mockChannel.On("Recv").Return(&risppb.ServerMessage{
-		State: risppb.ConnectionState_CLOSING,
+		State: risppb.ConnectionState_CLOSED,
 	}, nil).Once()
 	mockChannel.On("Recv").Return(nil, nil).Maybe()
 	require.NoError(t, c.Run(ctx))

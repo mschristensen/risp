@@ -17,7 +17,7 @@ type ClientAppCfg interface {
 
 // ClientApp is the demo RISP client application.
 type ClientApp struct {
-	ServerAddr string `validate:"required"`
+	Port uint16 `validate:"required"`
 }
 
 // NewClientApp creates a new ClientApp.
@@ -28,6 +28,9 @@ func NewClientApp(cfgs ...ClientAppCfg) (*ClientApp, error) {
 			return nil, errors.Wrap(err, "apply ClientApp cfg failed")
 		}
 	}
+	if app.Port == 0 {
+		app.Port = uint16(internal.Port)
+	}
 	if err := validate.Validate().Struct(app); err != nil {
 		return nil, errors.Wrap(err, "validate ClientApp failed")
 	}
@@ -36,11 +39,14 @@ func NewClientApp(cfgs ...ClientAppCfg) (*ClientApp, error) {
 
 func (app *ClientApp) Run(ctx context.Context, args []string) error {
 	c, err := client.NewClient(
-		client.WithRandomSequenceLength(),
-		client.WithServerPort(uint16(internal.Port)),
+		client.WithSequenceLength(4),
+		client.WithServerPort(app.Port),
 	)
 	if err != nil {
 		return errors.Wrap(err, "create client failed")
+	}
+	if err := c.Connect(ctx); err != nil {
+		return errors.Wrap(err, "connect client failed")
 	}
 	if err := c.Run(ctx); err != nil {
 		return errors.Wrap(err, "run client failed")

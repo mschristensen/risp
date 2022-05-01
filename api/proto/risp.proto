@@ -10,16 +10,18 @@ service RISP {
 }
 
 enum ConnectionState {
-  CONNECTED = 0;
-  FINALISING = 1;
+  CONNECTING = 0;
+  CONNECTED = 1;
   CLOSING = 2;
+  CLOSED = 3;
 }
 
 message ClientMessage {
   ConnectionState state = 1;
-  bytes uuid = 2;
-  bytes window = 3;
-  bytes ack = 4;
+  uint32 len = 2;
+  bytes uuid = 3;
+  bytes window = 4;
+  bytes ack = 5;
 }
 
 message ServerMessage {

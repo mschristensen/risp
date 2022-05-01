@@ -11,8 +11,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
+
+var logger logrus.FieldLogger = logrus.StandardLogger()
 
 // DefaultWindowSize is the default window size for the client.
 const DefaultWindowSize = 1
@@ -26,6 +30,7 @@ type Client struct {
 	sequenceLength uint16
 	sequence       []uint32
 	checksum       []byte
+	started        bool
 	done           bool
 
 	conn    *grpc.ClientConn
@@ -82,7 +87,11 @@ func (c *Client) Connect(ctx context.Context) error {
 		}
 	}
 	var err error
-	c.conn, err = grpc.DialContext(ctx, c.serverAddr)
+	c.conn, err = grpc.DialContext(ctx,
+		c.serverAddr,
+		// TODO: use TLS
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return errors.Wrapf(err, "connect to %s failed", c.serverAddr)
 	}
@@ -121,20 +130,20 @@ func (c *Client) sendRecv(ctx context.Context, in chan *risppb.ClientMessage) (c
 
 // handleMessage handles a message from the server.
 func (c *Client) handleMessage(ctx context.Context, msg *risppb.ServerMessage) error {
-	if msg.State == risppb.ConnectionState_FINALISING {
+	if msg.State == risppb.ConnectionState_CLOSING {
 		if c.ack != 1<<c.sequenceLength-1 {
-			return errors.New("received finalising message before all items received")
+			return errors.New("received closing message before all items received")
 		}
 		c.checksum = msg.Checksum
 		c.window = 0
 		return nil
 	}
-	if msg.State == risppb.ConnectionState_CLOSING {
+	if msg.State == risppb.ConnectionState_CLOSED {
 		if c.ack != 1<<c.sequenceLength-1 {
-			return errors.New("received closing message before all items received")
+			return errors.New("received closed message before all items received")
 		}
 		if len(c.checksum) == 0 {
-			return errors.New("received closing message before checksum received")
+			return errors.New("received closed message before checksum received")
 		}
 		c.window = 0
 		c.done = true
@@ -155,17 +164,25 @@ func (c *Client) handleMessage(ctx context.Context, msg *risppb.ServerMessage) e
 
 // nextMessage prepares the next message to send to the server based on the current client state.
 func (c *Client) nextMessage() (*risppb.ClientMessage, error) {
-	msg := &risppb.ClientMessage{}
+	msg := &risppb.ClientMessage{
+		Uuid: c.uuid[:],
+		Len:  uint32(c.sequenceLength),
+	}
 
-	msg.State = risppb.ConnectionState_CONNECTED
+	if !c.started {
+		msg.State = risppb.ConnectionState_CONNECTING
+		c.started = true
+		return msg, nil
+	}
 	if len(c.checksum) > 0 {
-		msg.State = risppb.ConnectionState_CLOSING
+		msg.State = risppb.ConnectionState_CLOSED
 		return msg, nil
 	}
 	if c.ack == 1<<c.sequenceLength-1 {
-		msg.State = risppb.ConnectionState_FINALISING
+		msg.State = risppb.ConnectionState_CLOSING
 		return msg, nil
 	}
+	msg.State = risppb.ConnectionState_CONNECTED
 
 	bs, err := c.uuid.MarshalBinary()
 	if err != nil {
@@ -200,8 +217,14 @@ func (c *Client) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		case msg := <-inbox:
+			logger.WithFields(logrus.Fields{
+				"state":    msg.State.String(),
+				"offset":   msg.Offset,
+				"payload":  msg.Payload,
+				"checksum": msg.Checksum,
+			}).Info("received message")
 			if err := c.handleMessage(ctx, msg); err != nil {
 				return errors.Wrap(err, "handle message failed")
 			}
@@ -215,6 +238,13 @@ func (c *Client) Run(ctx context.Context) error {
 					return errors.Wrap(err, "next message failed")
 				}
 				outbox <- msg
+				logger.WithFields(logrus.Fields{
+					"state":  msg.State.String(),
+					"uuid":   msg.Uuid,
+					"ack":    msg.Ack,
+					"len":    msg.Len,
+					"window": msg.Window,
+				}).Info("sent message")
 			}
 		}
 	}
