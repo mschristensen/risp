@@ -22,3 +22,9 @@ dependencies: ## Creates the directories containing the compiled go libraries
 .PHONY: protobuf
 protobuf: ## Generates the go libraries.
 	@$(COMPILE_CMD)
+
+
+## mocks:				Generate mocks in all packages.
+.PHONY:
+mocks:
+	@mockery --dir ./gen/pb-go/github.com/mschristensen/risp/api/build/go/ --output ./gen/pb-go/github.com/mschristensen/risp/api/build/go/mocks --all

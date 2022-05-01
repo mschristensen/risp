@@ -24,20 +24,68 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Message struct {
+type ConnectionState int32
+
+const (
+	ConnectionState_CONNECTED  ConnectionState = 0
+	ConnectionState_FINALISING ConnectionState = 1
+	ConnectionState_CLOSING    ConnectionState = 2
+)
+
+// Enum value maps for ConnectionState.
+var (
+	ConnectionState_name = map[int32]string{
+		0: "CONNECTED",
+		1: "FINALISING",
+		2: "CLOSING",
+	}
+	ConnectionState_value = map[string]int32{
+		"CONNECTED":  0,
+		"FINALISING": 1,
+		"CLOSING":    2,
+	}
+)
+
+func (x ConnectionState) Enum() *ConnectionState {
+	p := new(ConnectionState)
+	*p = x
+	return p
+}
+
+func (x ConnectionState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ConnectionState) Descriptor() protoreflect.EnumDescriptor {
+	return file_risp_proto_enumTypes[0].Descriptor()
+}
+
+func (ConnectionState) Type() protoreflect.EnumType {
+	return &file_risp_proto_enumTypes[0]
+}
+
+func (x ConnectionState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ConnectionState.Descriptor instead.
+func (ConnectionState) EnumDescriptor() ([]byte, []int) {
+	return file_risp_proto_rawDescGZIP(), []int{0}
+}
+
+type ClientMessage struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid    []byte `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	Window  []byte `protobuf:"bytes,2,opt,name=window,proto3" json:"window,omitempty"`
-	Mask    []byte `protobuf:"bytes,3,opt,name=mask,proto3" json:"mask,omitempty"`
-	Target  []byte `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
-	Payload uint32 `protobuf:"varint,5,opt,name=payload,proto3" json:"payload,omitempty"`
+	State  ConnectionState `protobuf:"varint,1,opt,name=state,proto3,enum=risp.v1.ConnectionState" json:"state,omitempty"`
+	Uuid   []byte          `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Window []byte          `protobuf:"bytes,3,opt,name=window,proto3" json:"window,omitempty"`
+	Ack    []byte          `protobuf:"bytes,4,opt,name=ack,proto3" json:"ack,omitempty"`
 }
 
-func (x *Message) Reset() {
-	*x = Message{}
+func (x *ClientMessage) Reset() {
+	*x = ClientMessage{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_risp_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -45,13 +93,13 @@ func (x *Message) Reset() {
 	}
 }
 
-func (x *Message) String() string {
+func (x *ClientMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Message) ProtoMessage() {}
+func (*ClientMessage) ProtoMessage() {}
 
-func (x *Message) ProtoReflect() protoreflect.Message {
+func (x *ClientMessage) ProtoReflect() protoreflect.Message {
 	mi := &file_risp_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -63,66 +111,143 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Message.ProtoReflect.Descriptor instead.
-func (*Message) Descriptor() ([]byte, []int) {
+// Deprecated: Use ClientMessage.ProtoReflect.Descriptor instead.
+func (*ClientMessage) Descriptor() ([]byte, []int) {
 	return file_risp_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *Message) GetUuid() []byte {
+func (x *ClientMessage) GetState() ConnectionState {
+	if x != nil {
+		return x.State
+	}
+	return ConnectionState_CONNECTED
+}
+
+func (x *ClientMessage) GetUuid() []byte {
 	if x != nil {
 		return x.Uuid
 	}
 	return nil
 }
 
-func (x *Message) GetWindow() []byte {
+func (x *ClientMessage) GetWindow() []byte {
 	if x != nil {
 		return x.Window
 	}
 	return nil
 }
 
-func (x *Message) GetMask() []byte {
+func (x *ClientMessage) GetAck() []byte {
 	if x != nil {
-		return x.Mask
+		return x.Ack
 	}
 	return nil
 }
 
-func (x *Message) GetTarget() []byte {
+type ServerMessage struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	State    ConnectionState `protobuf:"varint,1,opt,name=state,proto3,enum=risp.v1.ConnectionState" json:"state,omitempty"`
+	Offset   []byte          `protobuf:"bytes,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	Payload  uint32          `protobuf:"varint,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	Checksum []byte          `protobuf:"bytes,4,opt,name=checksum,proto3" json:"checksum,omitempty"`
+}
+
+func (x *ServerMessage) Reset() {
+	*x = ServerMessage{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_risp_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ServerMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerMessage) ProtoMessage() {}
+
+func (x *ServerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_risp_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
+func (*ServerMessage) Descriptor() ([]byte, []int) {
+	return file_risp_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ServerMessage) GetState() ConnectionState {
 	if x != nil {
-		return x.Target
+		return x.State
+	}
+	return ConnectionState_CONNECTED
+}
+
+func (x *ServerMessage) GetOffset() []byte {
+	if x != nil {
+		return x.Offset
 	}
 	return nil
 }
 
-func (x *Message) GetPayload() uint32 {
+func (x *ServerMessage) GetPayload() uint32 {
 	if x != nil {
 		return x.Payload
 	}
 	return 0
 }
 
+func (x *ServerMessage) GetChecksum() []byte {
+	if x != nil {
+		return x.Checksum
+	}
+	return nil
+}
+
 var File_risp_proto protoreflect.FileDescriptor
 
 var file_risp_proto_rawDesc = []byte{
 	0x0a, 0x0a, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x07, 0x72, 0x69,
-	0x73, 0x70, 0x2e, 0x76, 0x31, 0x22, 0x7b, 0x0a, 0x07, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
-	0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04,
-	0x75, 0x75, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x77, 0x69, 0x6e, 0x64, 0x6f, 0x77, 0x12, 0x12, 0x0a, 0x04,
-	0x6d, 0x61, 0x73, 0x6b, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x6d, 0x61, 0x73, 0x6b,
-	0x12, 0x16, 0x0a, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c,
-	0x52, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c,
-	0x6f, 0x61, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f,
-	0x61, 0x64, 0x32, 0x39, 0x0a, 0x04, 0x52, 0x49, 0x53, 0x50, 0x12, 0x31, 0x0a, 0x07, 0x43, 0x6f,
-	0x6e, 0x6e, 0x65, 0x63, 0x74, 0x12, 0x10, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76, 0x31, 0x2e,
-	0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x1a, 0x10, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76,
-	0x31, 0x2e, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x28, 0x01, 0x30, 0x01, 0x42, 0x2c, 0x5a,
-	0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x73, 0x63, 0x68,
-	0x72, 0x69, 0x73, 0x74, 0x65, 0x6e, 0x73, 0x65, 0x6e, 0x2f, 0x72, 0x69, 0x73, 0x70, 0x2f, 0x61,
-	0x70, 0x69, 0x2f, 0x62, 0x75, 0x69, 0x6c, 0x64, 0x2f, 0x67, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x73, 0x70, 0x2e, 0x76, 0x31, 0x22, 0x7d, 0x0a, 0x0d, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x4d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x2e, 0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x18, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76, 0x31, 0x2e,
+	0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52,
+	0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x69,
+	0x6e, 0x64, 0x6f, 0x77, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x77, 0x69, 0x6e, 0x64,
+	0x6f, 0x77, 0x12, 0x10, 0x0a, 0x03, 0x61, 0x63, 0x6b, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c, 0x52,
+	0x03, 0x61, 0x63, 0x6b, 0x22, 0x8d, 0x01, 0x0a, 0x0d, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x4d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x2e, 0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x18, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76, 0x31, 0x2e,
+	0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52,
+	0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x12, 0x18,
+	0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52,
+	0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x12, 0x1a, 0x0a, 0x08, 0x63, 0x68, 0x65, 0x63,
+	0x6b, 0x73, 0x75, 0x6d, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x08, 0x63, 0x68, 0x65, 0x63,
+	0x6b, 0x73, 0x75, 0x6d, 0x2a, 0x3d, 0x0a, 0x0f, 0x43, 0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x69,
+	0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0d, 0x0a, 0x09, 0x43, 0x4f, 0x4e, 0x4e, 0x45,
+	0x43, 0x54, 0x45, 0x44, 0x10, 0x00, 0x12, 0x0e, 0x0a, 0x0a, 0x46, 0x49, 0x4e, 0x41, 0x4c, 0x49,
+	0x53, 0x49, 0x4e, 0x47, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x43, 0x4c, 0x4f, 0x53, 0x49, 0x4e,
+	0x47, 0x10, 0x02, 0x32, 0x45, 0x0a, 0x04, 0x52, 0x49, 0x53, 0x50, 0x12, 0x3d, 0x0a, 0x07, 0x43,
+	0x6f, 0x6e, 0x6e, 0x65, 0x63, 0x74, 0x12, 0x16, 0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76, 0x31,
+	0x2e, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x1a, 0x16,
+	0x2e, 0x72, 0x69, 0x73, 0x70, 0x2e, 0x76, 0x31, 0x2e, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x4d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x28, 0x01, 0x30, 0x01, 0x42, 0x2c, 0x5a, 0x2a, 0x67, 0x69,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x73, 0x63, 0x68, 0x72, 0x69, 0x73,
+	0x74, 0x65, 0x6e, 0x73, 0x65, 0x6e, 0x2f, 0x72, 0x69, 0x73, 0x70, 0x2f, 0x61, 0x70, 0x69, 0x2f,
+	0x62, 0x75, 0x69, 0x6c, 0x64, 0x2f, 0x67, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -137,18 +262,23 @@ func file_risp_proto_rawDescGZIP() []byte {
 	return file_risp_proto_rawDescData
 }
 
-var file_risp_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_risp_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_risp_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_risp_proto_goTypes = []interface{}{
-	(*Message)(nil), // 0: risp.v1.Message
+	(ConnectionState)(0),  // 0: risp.v1.ConnectionState
+	(*ClientMessage)(nil), // 1: risp.v1.ClientMessage
+	(*ServerMessage)(nil), // 2: risp.v1.ServerMessage
 }
 var file_risp_proto_depIdxs = []int32{
-	0, // 0: risp.v1.RISP.Connect:input_type -> risp.v1.Message
-	0, // 1: risp.v1.RISP.Connect:output_type -> risp.v1.Message
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: risp.v1.ClientMessage.state:type_name -> risp.v1.ConnectionState
+	0, // 1: risp.v1.ServerMessage.state:type_name -> risp.v1.ConnectionState
+	1, // 2: risp.v1.RISP.Connect:input_type -> risp.v1.ClientMessage
+	2, // 3: risp.v1.RISP.Connect:output_type -> risp.v1.ServerMessage
+	3, // [3:4] is the sub-list for method output_type
+	2, // [2:3] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_risp_proto_init() }
@@ -158,7 +288,19 @@ func file_risp_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_risp_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Message); i {
+			switch v := v.(*ClientMessage); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_risp_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ServerMessage); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -175,13 +317,14 @@ func file_risp_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_risp_proto_rawDesc,
-			NumEnums:      0,
-			NumMessages:   1,
+			NumEnums:      1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_risp_proto_goTypes,
 		DependencyIndexes: file_risp_proto_depIdxs,
+		EnumInfos:         file_risp_proto_enumTypes,
 		MessageInfos:      file_risp_proto_msgTypes,
 	}.Build()
 	File_risp_proto = out.File
@@ -224,8 +367,8 @@ func (c *rISPClient) Connect(ctx context.Context, opts ...grpc.CallOption) (RISP
 }
 
 type RISP_ConnectClient interface {
-	Send(*Message) error
-	Recv() (*Message, error)
+	Send(*ClientMessage) error
+	Recv() (*ServerMessage, error)
 	grpc.ClientStream
 }
 
@@ -233,12 +376,12 @@ type rISPConnectClient struct {
 	grpc.ClientStream
 }
 
-func (x *rISPConnectClient) Send(m *Message) error {
+func (x *rISPConnectClient) Send(m *ClientMessage) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *rISPConnectClient) Recv() (*Message, error) {
-	m := new(Message)
+func (x *rISPConnectClient) Recv() (*ServerMessage, error) {
+	m := new(ServerMessage)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -268,8 +411,8 @@ func _RISP_Connect_Handler(srv interface{}, stream grpc.ServerStream) error {
 }
 
 type RISP_ConnectServer interface {
-	Send(*Message) error
-	Recv() (*Message, error)
+	Send(*ServerMessage) error
+	Recv() (*ClientMessage, error)
 	grpc.ServerStream
 }
 
@@ -277,12 +420,12 @@ type rISPConnectServer struct {
 	grpc.ServerStream
 }
 
-func (x *rISPConnectServer) Send(m *Message) error {
+func (x *rISPConnectServer) Send(m *ServerMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *rISPConnectServer) Recv() (*Message, error) {
-	m := new(Message)
+func (x *rISPConnectServer) Recv() (*ClientMessage, error) {
+	m := new(ClientMessage)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

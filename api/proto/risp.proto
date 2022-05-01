@@ -6,13 +6,25 @@ option go_package = "github.com/mschristensen/risp/api/build/go";
 // RISP is a service that implements a RISP server.
 service RISP {
   // Connect establishes a connection over which data is exchanged.
-  rpc Connect(stream Message) returns (stream Message);
+  rpc Connect(stream ClientMessage) returns (stream ServerMessage);
 }
 
-message Message {
-  bytes uuid = 1;
-  bytes window = 2;
-  bytes mask = 3;
-  bytes target = 4;
-  uint32 payload = 5;
+enum ConnectionState {
+  CONNECTED = 0;
+  FINALISING = 1;
+  CLOSING = 2;
+}
+
+message ClientMessage {
+  ConnectionState state = 1;
+  bytes uuid = 2;
+  bytes window = 3;
+  bytes ack = 4;
+}
+
+message ServerMessage {
+  ConnectionState state = 1;
+  bytes offset = 2;
+  uint32 payload = 3;
+  bytes checksum = 4;
 }

@@ -3,6 +3,8 @@ package apps
 import (
 	"context"
 
+	"risp/internal"
+	"risp/internal/pkg/client"
 	"risp/internal/pkg/validate"
 
 	"github.com/pkg/errors"
@@ -15,6 +17,7 @@ type ClientAppCfg interface {
 
 // ClientApp is the demo RISP client application.
 type ClientApp struct {
+	ServerAddr string `validate:"required"`
 }
 
 // NewClientApp creates a new ClientApp.
@@ -32,5 +35,15 @@ func NewClientApp(cfgs ...ClientAppCfg) (*ClientApp, error) {
 }
 
 func (app *ClientApp) Run(ctx context.Context, args []string) error {
+	c, err := client.NewClient(
+		client.WithRandomSequenceLength(),
+		client.WithServerPort(uint16(internal.Port)),
+	)
+	if err != nil {
+		return errors.Wrap(err, "create client failed")
+	}
+	if err := c.Run(ctx); err != nil {
+		return errors.Wrap(err, "run client failed")
+	}
 	return errors.New("not implemented")
 }
