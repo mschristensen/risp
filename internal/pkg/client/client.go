@@ -23,8 +23,11 @@ import (
 
 var logger logrus.FieldLogger = logrus.StandardLogger()
 
-// DefaultWindowSize is the default window size for the client.
-const DefaultWindowSize = 4
+// DefaultWindowSize is the default initial window size for the client.
+const DefaultWindowSize = 1 << 2
+
+// MaxWindowSize is the maximum window size for the client.
+const MaxWindowSize = 1 << 8
 
 // Client implements the client behaviour of RISP.
 type Client struct {
@@ -32,10 +35,11 @@ type Client struct {
 	uuid       uuid.UUID
 	session    session.Session
 
-	started  bool
-	closing  bool
-	done     bool
-	checksum *uint64
+	started        bool
+	closing        bool
+	done           bool
+	lastWindowSize uint16
+	checksum       *uint64
 
 	conn    *grpc.ClientConn
 	channel risppb.RISP_ConnectClient
@@ -78,46 +82,33 @@ func NewClient(cfgs ...Cfg) (*Client, error) {
 	}
 	client.uuid = uuid.New()
 	client.session.Window = DefaultWindowSize
+	client.lastWindowSize = DefaultWindowSize
 	return client, nil
 }
 
-// Connect establishes the connection to the server.
-func (c *Client) Connect(ctx context.Context) error {
-	if c.conn != nil {
-		// TODO ensure conn gets closed even if there is never a redial
-		if err := c.conn.Close(); err != nil {
-			return errors.Wrap(err, "close client connection failed")
-		}
+// min returns the minimum of two values.
+func min(a, b uint16) uint16 {
+	if a < b {
+		return a
 	}
-	var err error
-	c.conn, err = grpc.DialContext(ctx,
-		c.serverAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()), // TODO: use TLS
-	)
-	if err != nil {
-		return errors.Wrapf(err, "connect to %s failed", c.serverAddr)
-	}
-	c.channel, err = risppb.NewRISPClient(c.conn).Connect(ctx)
-	if err != nil {
-		return errors.Wrap(err, "call connect failed")
-	}
-	return nil
+	return b
 }
 
 // sendRecv sends messages to the server that are received on the inbound channel,
 // and receives messages from the server and sends them on the returned on the outbound channel.
-func (c *Client) sendRecv(_ context.Context, in chan *risppb.ClientMessage) chan *risppb.ServerMessage {
+func (c *Client) sendRecv(in chan *risppb.ClientMessage) (chan *risppb.ServerMessage, <-chan error) {
 	out := make(chan *risppb.ServerMessage)
+	kill := make(chan error)
 	go func() {
 		defer close(out)
 		for {
 			msg, err := c.channel.Recv()
-			if err != nil && status.Code(err) == codes.Canceled {
+			if err != nil {
 				if c.done {
 					return
 				}
-				// TODO handle reconnection
-				panic(err)
+				kill <- errors.Wrap(err, "recv failed")
+				return
 			}
 			out <- msg
 		}
@@ -125,12 +116,12 @@ func (c *Client) sendRecv(_ context.Context, in chan *risppb.ClientMessage) chan
 	go func() {
 		for msg := range in {
 			if err := c.channel.Send(msg); err != nil {
-				// TODO handle error
-				panic(err)
+				kill <- errors.Wrap(err, "send failed")
+				return
 			}
 		}
 	}()
-	return out
+	return out, kill
 }
 
 // handleMessage updates the client state using the message from the server.
@@ -203,6 +194,89 @@ func (c *Client) nextMessage() *risppb.ClientMessage {
 	return msg
 }
 
+// Connect establishes the connection to the server.
+func (c *Client) Connect(ctx context.Context) error {
+	if c.conn != nil {
+		if err := c.conn.Close(); err != nil && status.Code(err) != codes.Canceled {
+			return errors.Wrap(err, "close client connection failed")
+		}
+	}
+	var err error
+	c.conn, err = grpc.DialContext(ctx,
+		c.serverAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()), // TODO: use TLS
+	)
+	if err != nil {
+		return errors.Wrapf(err, "connect to %s failed", c.serverAddr)
+	}
+	logger.Info("client connecting...")
+	c.channel, err = risppb.NewRISPClient(c.conn).Connect(ctx)
+	if err != nil {
+		return errors.Wrap(err, "call connect failed")
+	}
+	return nil
+}
+
+// Run runs client-side RISP protocol to receive the integer stream from the server.
+func (c *Client) Run(ctx context.Context) error {
+	defer c.Reset()
+	out := make(chan *risppb.ClientMessage)
+	defer close(out)
+	in, kill := c.sendRecv(out)
+
+	// The client ticker is longer than the server ticker, so that we don't see duplicate messages.
+	// Increasing this value can simulate what happens when messages arrive late from the server,
+	// causing the client to retry messages.
+	ticker := time.NewTicker(2 * time.Second)
+	killswitch := time.NewTicker(20 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case msg, ok := <-in:
+			if !ok || msg == nil {
+				return nil
+			}
+			logger.WithFields(log.ServerMessageToFields(msg)).Info("received message")
+			if err := c.handleMessage(ctx, msg); err != nil {
+				return errors.Wrap(err, "handle message failed")
+			}
+			if c.done {
+				if err := c.Finish(); err != nil {
+					return errors.Wrap(err, "finish failed")
+				}
+				return nil
+			}
+		case <-ticker.C:
+			if !c.started || c.session.Window == 0 || c.session.Ack == uint16(len(c.session.Sequence)) {
+				if c.session.Window == 0 {
+					c.session.Window = min(2*c.lastWindowSize, MaxWindowSize)
+					c.lastWindowSize = c.session.Window
+				}
+				msg := c.nextMessage()
+				out <- msg
+				logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
+			}
+		case <-killswitch.C:
+			if err := c.channel.CloseSend(); err != nil {
+				logger.Warning(errors.Wrap(err, "failed to close send channel"))
+			}
+			logger.Warning("disconnecting by killswitch")
+			return ErrClientDisconnected
+		case err := <-kill:
+			logger.Warning(errors.Wrap(err, "send recv killed"))
+			return ErrClientDisconnected
+		}
+	}
+}
+
+// Reset prepares the client for reconnection.
+func (c *Client) Reset() {
+	c.started = false
+	c.session.Window = DefaultWindowSize
+	c.lastWindowSize = DefaultWindowSize
+}
+
 // Finish checks the client has correctly received the sequence from the server
 // and logs the result.
 func (c *Client) Finish() error {
@@ -228,48 +302,4 @@ func (c *Client) Finish() error {
 		"checksum": *c.checksum,
 	}).Info("client completed successfully")
 	return nil
-}
-
-// Run runs client-side RISP protocol to receive the integer stream from the server.
-func (c *Client) Run(ctx context.Context) error {
-	out := make(chan *risppb.ClientMessage)
-	defer close(out)
-	in := c.sendRecv(ctx, out)
-
-	// initiate handshake
-	msg := c.nextMessage()
-	out <- msg
-	logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
-
-	// The client ticker is longer than the server ticker, so that we don't see duplicate messages.
-	// Increasing this value can simulate what happens when messages arrive late from the server,
-	// causing the client to retry messages.
-	ticker := time.NewTicker(2 * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case msg, ok := <-in:
-			if !ok || msg == nil {
-				return nil
-			}
-			logger.WithFields(log.ServerMessageToFields(msg)).Info("received message")
-			if err := c.handleMessage(ctx, msg); err != nil {
-				return errors.Wrap(err, "handle message failed")
-			}
-			if c.done {
-				if err := c.Finish(); err != nil {
-					return errors.Wrap(err, "finish failed")
-				}
-				return nil
-			}
-		case <-ticker.C:
-			if c.session.Window == 0 || c.session.Ack == uint16(len(c.session.Sequence)) {
-				c.session.Window = DefaultWindowSize // TODO: it would be nice to dynamically size this based on connection stability
-				msg := c.nextMessage()
-				out <- msg
-				logger.WithFields(log.ClientMessageToFields(msg)).Info("sent message")
-			}
-		}
-	}
 }

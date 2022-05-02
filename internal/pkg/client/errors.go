@@ -10,3 +10,6 @@ var ErrMissingChecksum = errors.New("missing checksum")
 
 // ErrChecksumMismatch indicates that the checksum does not match the expected value.
 var ErrChecksumMismatch = errors.New("checksum mismatch")
+
+// ErrClientDisconnected indicates that the client disconnected from the server but should reconnect.
+var ErrClientDisconnected = errors.New("client disconnected")

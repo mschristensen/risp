@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"io"
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
 	"risp/internal/pkg/log"
 	"risp/internal/pkg/session"
@@ -46,6 +47,9 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	logger.Info("new connection established")
+	defer func() {
+		logger.Info("client disconnected")
+	}()
 
 	// first, we expect to receive a client handshake with the clientUUID
 	// and expected sequence length
@@ -85,7 +89,7 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 		return errors.New("sequence length mismatch")
 	}
 
-	// update the session state accoriding to what this client knows
+	// update the session state according to what this client knows
 	sess.Ack = uint16(msg.Ack)
 	sess.Window = uint16(msg.Window)
 	if err = s.store.Set(clientUUID, sess); err != nil {
@@ -100,7 +104,7 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	go func() {
 		defer wg.Done()
 		if err := NewHandler(clientUUID, s.store).Run(ctx, in, out); err != nil {
-			logger.Fatalln(err, "run worker failed")
+			logger.Fatalln(err, "run handler failed")
 		}
 	}()
 	go func() {
@@ -108,19 +112,18 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 		defer wg.Done()
 		for {
 			msg, err := srv.Recv()
-			if err != nil && status.Code(err) == codes.Canceled {
+			if err != nil && (errors.Is(err, io.EOF) || status.Code(err) == codes.Canceled) {
 				logger.WithField("uuid", clientUUID).Warning("client disconnected")
 				return
 			}
 			if err != nil {
-				logger.Fatalln(err)
+				logger.Fatalln(errors.Wrap(err, "receive failed"))
 			}
 			in <- msg
 		}
 	}()
 	for msg := range out {
 		if err := srv.Send(msg); err != nil {
-			// TODO handle reconnection
 			return errors.Wrap(err, "send message failed")
 		}
 	}

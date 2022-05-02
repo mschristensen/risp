@@ -3,11 +3,13 @@ package apps
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"risp/internal"
 	"risp/internal/pkg/client"
 	"risp/internal/pkg/validate"
 
+	"github.com/arsham/retry"
 	"github.com/pkg/errors"
 )
 
@@ -56,11 +58,18 @@ func (app *ClientApp) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return errors.Wrap(err, "create client failed")
 	}
-	if err := c.Connect(ctx); err != nil {
-		return errors.Wrap(err, "connect client failed")
+	retrier := &retry.Retry{
+		Attempts: 10,
+		Delay:    100 * time.Millisecond,
+		Method:   retry.IncrementalDelay,
 	}
-	if err := c.Run(ctx); err != nil {
-		return errors.Wrap(err, "run client failed")
-	}
-	return nil
+	return errors.Wrap(retrier.Do(func() error {
+		if err := c.Connect(ctx); err != nil {
+			return errors.Wrap(err, "connect client failed")
+		}
+		if err := c.Run(ctx); err != nil {
+			return errors.Wrap(err, "run client failed")
+		}
+		return nil
+	}), "retry failed")
 }
