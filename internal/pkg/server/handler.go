@@ -45,7 +45,6 @@ func (h *Handler) handleMessage(msg *risppb.ClientMessage) error {
 		if err := h.store.Set(h.clientUUID, h.session); err != nil {
 			return errors.Wrap(err, "set session failed")
 		}
-		// TODO: do not reinit sequence if already done, also do not allow len to be different
 		return nil
 	case risppb.ConnectionState_CLOSING:
 		h.closing = true
@@ -53,9 +52,6 @@ func (h *Handler) handleMessage(msg *risppb.ClientMessage) error {
 	case risppb.ConnectionState_CLOSED:
 		if h.done {
 			return nil
-		}
-		if err := h.store.Clear(h.clientUUID); err != nil {
-			return errors.Wrap(err, "clear session failed")
 		}
 		h.done = true
 		return nil
@@ -70,6 +66,9 @@ func (h *Handler) nextMessage() (*risppb.ServerMessage, error) {
 	}
 	if h.done {
 		msg.State = risppb.ConnectionState_CLOSED
+		if err := h.store.Clear(h.clientUUID); err != nil {
+			return nil, errors.Wrap(err, "clear session failed")
+		}
 		return msg, nil
 	}
 	if h.closing {
@@ -126,6 +125,9 @@ func (h *Handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out 
 			if msg != nil {
 				out <- msg
 				logger.WithFields(log.ServerMessageToFields(msg)).Info("sent message")
+				if msg.State == risppb.ConnectionState_CLOSED {
+					return nil
+				}
 				h.session.Window--
 				h.session.Ack++
 			}
