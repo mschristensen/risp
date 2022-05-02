@@ -33,13 +33,13 @@ func PortFromEnv() *PortCfg {
 }
 
 // ApplyClientApp applies the PortCfg to a ClientApp.
-func (cfg PortCfg) ApplyClientApp(app *apps.ClientApp) error {
+func (cfg PortCfg) ApplyClientApp(app *apps.ClientApp) error { // nolint:unparam // its okay that the error is always nil
 	app.Port = cfg.port
 	return nil
 }
 
 // ApplyServerApp applies the PortCfg to a ServerApp.
-func (cfg PortCfg) ApplyServerApp(app *apps.ServerApp) error {
+func (cfg PortCfg) ApplyServerApp(app *apps.ServerApp) error { // nolint:unparam // its okay that the error is always nil
 	app.Port = cfg.port
 	return nil
 }
