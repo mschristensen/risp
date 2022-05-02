@@ -49,26 +49,24 @@ var (
 	}
 )
 
-func newApp(_ context.Context, cmd *cobra.Command, args []string) (apps.App, []string, error) {
+func newApp(_ context.Context, cmd *cobra.Command) (apps.App, error) {
 	var err error
 	var app apps.App
 	switch cmd.Name() {
 	case "client":
 		app, err = apps.NewClientApp(cfg.PortFromEnv())
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "new client app failed")
+			return nil, errors.Wrap(err, "new client app failed")
 		}
-		args = append([]string{cmd.Name()}, args[1:]...)
-		return app, args, nil
+		return app, nil
 	case "server":
 		app, err = apps.NewServerApp(cfg.PortFromEnv())
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "new server app failed")
+			return nil, errors.Wrap(err, "new server app failed")
 		}
-		args = append([]string{cmd.Name()}, args[1:]...)
-		return app, args, nil
+		return app, nil
 	default:
-		return nil, nil, fmt.Errorf("unknown command: %s", cmd.Name())
+		return nil, fmt.Errorf("unknown command: %s", cmd.Name())
 	}
 }
 
@@ -81,7 +79,7 @@ func runCmd(cmd *cobra.Command, args []string) error {
 	); err != nil {
 		return errors.Wrap(err, "chained check failed")
 	}
-	app, args, err := newApp(cmd.Context(), cmd, args)
+	app, err := newApp(cmd.Context(), cmd)
 	if err != nil {
 		return errors.Wrapf(err, "new %s app failed", cmd.Name())
 	}
