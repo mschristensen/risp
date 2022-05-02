@@ -46,10 +46,7 @@ func NewServer(cfgs ...Cfg) (*Server, error) {
 func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	logger.Info("new connection established")
-	defer func() {
-		logger.Info("client disconnected")
-	}()
+	logger.Info("connecting")
 
 	// first, we expect to receive a client handshake with the clientUUID
 	// and expected sequence length
@@ -128,5 +125,6 @@ func (s *Server) Connect(srv risppb.RISP_ConnectServer) error {
 		}
 	}
 	wg.Wait()
+	logger.WithField("uuid", clientUUID).Info("disconnecting")
 	return nil
 }
