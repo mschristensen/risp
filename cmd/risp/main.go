@@ -8,6 +8,7 @@ import (
 
 	"risp/internal"
 	"risp/internal/app/apps"
+	"risp/internal/app/cfg"
 	"risp/internal/pkg/log"
 
 	"github.com/pkg/errors"
@@ -53,18 +54,18 @@ func newApp(_ context.Context, cmd *cobra.Command, args []string) (apps.App, []s
 	var app apps.App
 	switch cmd.Name() {
 	case "client":
-		app, err = apps.NewClientApp()
+		app, err = apps.NewClientApp(cfg.PortFromEnv())
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "new client app failed")
 		}
-		args = append([]string{cmd.Name()}, args...)
+		args = append([]string{cmd.Name()}, args[1:]...)
 		return app, args, nil
 	case "server":
-		app, err = apps.NewServerApp()
+		app, err = apps.NewServerApp(cfg.PortFromEnv())
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "new server app failed")
 		}
-		args = append([]string{cmd.Name()}, args...)
+		args = append([]string{cmd.Name()}, args[1:]...)
 		return app, args, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown command: %s", cmd.Name())

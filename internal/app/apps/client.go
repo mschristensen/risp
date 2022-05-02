@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	"risp/internal"
 	"risp/internal/pkg/client"
 	"risp/internal/pkg/validate"
 
@@ -31,9 +30,6 @@ func NewClientApp(cfgs ...ClientAppCfg) (*ClientApp, error) {
 			return nil, errors.Wrap(err, "apply ClientApp cfg failed")
 		}
 	}
-	if app.Port == 0 {
-		app.Port = uint16(internal.Port)
-	}
 	if err := validate.Validate().Struct(app); err != nil {
 		return nil, errors.Wrap(err, "validate ClientApp failed")
 	}
@@ -45,8 +41,8 @@ func (app *ClientApp) Run(ctx context.Context, args []string) error {
 	cfgs := []client.Cfg{
 		client.WithServerPort(app.Port),
 	}
-	if len(args) > 1 {
-		sequenceLength, err := strconv.ParseUint(args[1], 10, 16)
+	if len(args) > 0 {
+		sequenceLength, err := strconv.ParseUint(args[0], 10, 16)
 		if err != nil {
 			return errors.Wrap(err, "parse sequence length argument failed")
 		}
@@ -63,7 +59,7 @@ func (app *ClientApp) Run(ctx context.Context, args []string) error {
 		Delay:    500 * time.Millisecond,
 		Method:   retry.IncrementalDelay,
 	}
-	return errors.Wrap(retrier.Do(func() error {
+	err = retrier.Do(func() error {
 		if err := c.Connect(ctx); err != nil {
 			return errors.Wrap(err, "connect client failed")
 		}
@@ -71,5 +67,12 @@ func (app *ClientApp) Run(ctx context.Context, args []string) error {
 			return errors.Wrap(err, "run client failed")
 		}
 		return nil
-	}), "retry failed")
+	})
+	if err != nil {
+		return errors.Wrap(err, "run client failed")
+	}
+	if err := c.Finish(); err != nil {
+		return errors.Wrap(err, "finish failed")
+	}
+	return nil
 }

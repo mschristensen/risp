@@ -248,9 +248,6 @@ func (c *Client) Run(ctx context.Context) error {
 				return errors.Wrap(err, "handle message failed")
 			}
 			if c.done {
-				if err := c.Finish(); err != nil {
-					return errors.Wrap(err, "finish failed")
-				}
 				return nil
 			}
 		case <-ticker.C:
