@@ -8,6 +8,7 @@ import (
 	"time"
 
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
+	"risp/internal"
 	"risp/internal/pkg/checksum"
 	"risp/internal/pkg/log"
 	"risp/internal/pkg/session"
@@ -227,8 +228,13 @@ func (c *Client) Run(ctx context.Context) error {
 	// The client ticker is longer than the server ticker, so that we don't see duplicate messages.
 	// Increasing this value can simulate what happens when messages arrive late from the server,
 	// causing the client to retry messages.
-	ticker := time.NewTicker(2 * time.Second)
-	killswitch := time.NewTicker(20 * time.Second)
+	ticker := time.NewTicker(time.Duration(internal.ClientTickerMS) * time.Millisecond)
+	defer ticker.Stop()
+	killswitch := time.NewTicker(math.MaxInt64) // never ticks (for 290 years at least)
+	if internal.ClientKillswitchMS > 0 {
+		killswitch = time.NewTicker(time.Duration(internal.ClientKillswitchMS) * time.Millisecond)
+	}
+	defer killswitch.Stop()
 	for {
 		select {
 		case <-ctx.Done():

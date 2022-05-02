@@ -5,6 +5,7 @@ import (
 	"time"
 
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
+	"risp/internal"
 	"risp/internal/pkg/checksum"
 	"risp/internal/pkg/log"
 	"risp/internal/pkg/session"
@@ -96,7 +97,7 @@ func (h *Handler) nextMessage() (*risppb.ServerMessage, error) {
 // Run runs the handler.
 func (h *Handler) Run(ctx context.Context, in <-chan *risppb.ClientMessage, out chan<- *risppb.ServerMessage) error {
 	defer close(out)
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Duration(internal.ServerTickerMS) * time.Millisecond)
 
 	// initialise the handler state with the stored client session state
 	sess, err := h.store.Get(h.clientUUID)

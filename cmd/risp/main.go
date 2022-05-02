@@ -120,6 +120,21 @@ func init() {
 		logger.Fatalln(err)
 	}
 
+	err = internal.RegisterCommandFlags(clientCmd, []*internal.Flag{
+		&internal.ClientTickerMSFlag,
+		&internal.ClientKillswitchMSFlag,
+	})
+	if err != nil {
+		logger.Fatalln(err)
+	}
+
+	err = internal.RegisterCommandFlags(serverCmd, []*internal.Flag{
+		&internal.ServerTickerMSFlag,
+	})
+	if err != nil {
+		logger.Fatalln(err)
+	}
+
 	rootCmd.AddCommand(
 		clientCmd,
 		serverCmd,

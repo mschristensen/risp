@@ -63,6 +63,24 @@ var (
 		Usage: "The maximum allowed number of goroutines that can be spawned before healthchecks fail.",
 		Value: &MaxGoroutines,
 	}
+
+	ClientTickerMSFlag = Flag{
+		Name:  "client_ticker_ms",
+		Usage: "The number of milliseconds between client messages.",
+		Value: &ClientTickerMS,
+	}
+
+	ClientKillswitchMSFlag = Flag{
+		Name:  "client_killswitch_ms",
+		Usage: "The number of milliseconds between client disconnections. Leave unset to not trigger this behaviour.",
+		Value: &ClientKillswitchMS,
+	}
+
+	ServerTickerMSFlag = Flag{
+		Name:  "server_ticker_ms",
+		Usage: "The number of milliseconds between server messages.",
+		Value: &ServerTickerMS,
+	}
 )
 
 // Application configuration variables.
@@ -74,6 +92,10 @@ var (
 	Port       int
 
 	MaxGoroutines int
+
+	ClientTickerMS     int
+	ClientKillswitchMS int
+	ServerTickerMS     int
 )
 
 // setDefault sets the default value of the flag to the given value iff
@@ -115,6 +137,10 @@ func init() {
 	setDefault(&PortFlag, 8081)
 
 	setDefault(&MaxGoroutinesFlag, 200)
+
+	setDefault(&ClientTickerMSFlag, 2000)
+	setDefault(&ClientKillswitchMSFlag, 0)
+	setDefault(&ServerTickerMSFlag, 1000)
 }
 
 // RegisterCommandFlags registers the given flags with cobra.
