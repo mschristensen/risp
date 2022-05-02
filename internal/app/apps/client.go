@@ -59,8 +59,8 @@ func (app *ClientApp) Run(ctx context.Context, args []string) error {
 		return errors.Wrap(err, "create client failed")
 	}
 	retrier := &retry.Retry{
-		Attempts: 10,
-		Delay:    100 * time.Millisecond,
+		Attempts: 100,
+		Delay:    500 * time.Millisecond,
 		Method:   retry.IncrementalDelay,
 	}
 	return errors.Wrap(retrier.Do(func() error {
