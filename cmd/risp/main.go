@@ -26,7 +26,7 @@ var (
 	}
 
 	clientCmd = &cobra.Command{
-		Use:   "client",
+		Use:   "client [sequence_length]",
 		Short: "Starts a RISP client.",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) <= 1 {
