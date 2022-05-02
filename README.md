@@ -4,6 +4,10 @@
 
 RISP is an application implementing an demo protocol for streaming a sequence of integers from a server to a client.
 
+**Demo video:**
+
+https://user-images.githubusercontent.com/9295665/166226143-eb1c7a2d-b597-499e-9d76-90fc2b5320b2.mov
+
 ### Features
 
 RISP supports the following features:
