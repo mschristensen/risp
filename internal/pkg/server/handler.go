@@ -6,9 +6,9 @@ import (
 
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
 	"risp/internal"
-	"risp/internal/pkg/checksum"
 	"risp/internal/pkg/log"
 	"risp/internal/pkg/session"
+	"risp/pkg/checksum"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"

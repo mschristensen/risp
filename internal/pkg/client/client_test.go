@@ -6,7 +6,7 @@ import (
 
 	risppb "risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go"
 	"risp/api/proto/gen/pb-go/github.com/mschristensen/risp/api/build/go/mocks"
-	"risp/internal/pkg/checksum"
+	"risp/pkg/checksum"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
