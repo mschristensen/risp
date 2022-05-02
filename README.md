@@ -1,5 +1,24 @@
 # RISP: Realtime Integer Streaming Protocol
 
+- [RISP: Realtime Integer Streaming Protocol](#risp-realtime-integer-streaming-protocol)
+  - [Overview](#overview)
+    - [Features](#features)
+    - [Available Commands](#available-commands)
+      - [Getting Help](#getting-help)
+      - [RISP Client](#risp-client)
+      - [RISP Server](#risp-server)
+    - [Protocol](#protocol)
+      - [Message Structure](#message-structure)
+      - [Choreography](#choreography)
+    - [Project Structure](#project-structure)
+  - [Getting Started](#getting-started)
+    - [Application Setup](#application-setup)
+    - [Additional Help](#additional-help)
+    - [Running Tests](#running-tests)
+    - [Run a Demo](#run-a-demo)
+  - [Additional Notes](#additional-notes)
+    - [Further Improvements](#further-improvements)
+
 ## Overview
 
 RISP is an application implementing an demo protocol for streaming a sequence of integers from a server to a client.
